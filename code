@@ -1,0 +1,1674 @@
+import subprocess, threading, re, time, json, os, sys
+import FreeSimpleGUI as sg
+import random, ctypes, winreg
+
+CONFIG_FILE = "config.json"
+
+# === Multi-Language Translations ===
+LANG = {
+    "zh": {
+        "title": "轻松珍珠-轻松版 v1.0.2",
+        "miner_type": "矿机类型:",
+        "wallet_addr": "钱包地址:",
+        "pool_addr": "矿池地址:",
+        "worker_name": "矿工名:",
+        "gpu_index": "GPU索引:",
+        "start_mining": "开始挖矿",
+        "stop_mining": "停止挖矿",
+        "hashrate": "算力",
+        "gpu_info": "GPU信息:",
+        "gpu_monitor": "实时 GPU 监控",
+        "refresh": "刷新",
+        "oc_settings": "超频设置",
+        "refresh_gpu": "刷新GPU",
+        "gpu_status": "GPU状态:",
+        "power_limit": "功耗(W):",
+        "core_clock": "核心(MHz):",
+        "mem_clock": "显存(MHz):",
+        "fan_speed": "风扇(%):",
+        "apply": "应用",
+        "apply_all": "全部",
+        "reset_current": "一键恢复(当前)",
+        "reset_all": "一键恢复(全部)",
+        "auto_tab": "自动设置",
+        "auto_restart": "定时重启电脑(小时,填0则不启用):",
+        "apply_restart": "应用定时重启",
+        "cancel_restart": "取消定时重启",
+        "low_hash": "算力低于以下值(Th/s,填0则不启用):",
+        "low_hash_min": "持续多少分钟后重启:",
+        "save_settings": "保存设置",
+        "auto_start_mining": "启动后30秒自动开始挖矿",
+        "auto_startup": "开机自动启动",
+        "save_config": "保存配置",
+        "load_config": "加载配置",
+        "sys_settings": "系统设置",
+        "mining_tab": "挖矿",
+        "gpu_tab": "GPU监控",
+        "oc_tab": "超频",
+        "language": "语言",
+        "mining_stopped": "[挖矿已停止]",
+        "auto_start_msg": "将在30秒后自动开始挖矿...",
+        "auto_starting": "自动开始挖矿...",
+        "settings_saved": "自动设置已保存",
+        "restart_set": "定时重启已设置",
+        "restart_fail": "设置失败，请检查权限",
+        "restart_cancelled": "已取消定时重启",
+        "invalid_number": "请输入有效数字",
+        "no_permission": "创建/修改计划任务失败！请以管理员身份运行。",
+    },
+    "en": {
+        "title": "EasyPearl-Lite v1.0.2",
+        "miner_type": "Miner Type:",
+        "wallet_addr": "Wallet:",
+        "pool_addr": "Pool:",
+        "worker_name": "Worker:",
+        "gpu_index": "GPU Index:",
+        "start_mining": "Start Mining",
+        "stop_mining": "Stop Mining",
+        "hashrate": "Hashrate",
+        "gpu_info": "GPU Info:",
+        "gpu_monitor": "Real-time GPU Monitor",
+        "refresh": "Refresh",
+        "oc_settings": "OC Settings",
+        "refresh_gpu": "Refresh GPU",
+        "gpu_status": "GPU Status:",
+        "power_limit": "Power(W):",
+        "core_clock": "Core(MHz):",
+        "mem_clock": "Memory(MHz):",
+        "fan_speed": "Fan(%):",
+        "apply": "Apply",
+        "apply_all": "All",
+        "reset_current": "Reset Current",
+        "reset_all": "Reset All",
+        "auto_tab": "Auto",
+        "auto_restart": "Auto Restart (hours, 0=off):",
+        "apply_restart": "Apply Restart",
+        "cancel_restart": "Cancel Restart",
+        "low_hash": "Low hashrate threshold (TH/s, 0=off):",
+        "low_hash_min": "Minutes before restart:",
+        "save_settings": "Save Settings",
+        "auto_start_mining": "Auto-start mining 30s after launch",
+        "auto_startup": "Start with Windows",
+        "save_config": "Save Config",
+        "load_config": "Load Config",
+        "sys_settings": "System",
+        "mining_tab": "Mining",
+        "gpu_tab": "GPU",
+        "oc_tab": "OC",
+        "language": "Language",
+        "mining_stopped": "[Mining stopped]",
+        "auto_start_msg": "Auto-start mining in 30 seconds...",
+        "auto_starting": "Auto-starting mining...",
+        "settings_saved": "Auto settings saved",
+        "restart_set": "Scheduled restart set",
+        "restart_fail": "Failed, check permissions",
+        "restart_cancelled": "Scheduled restart cancelled",
+        "invalid_number": "Please enter a valid number",
+        "no_permission": "Failed to create task! Run as administrator.",
+    },
+    "ru": {
+        "title": "EasyPearl-Lite v1.0.2",
+        "miner_type": "Тип майнера:",
+        "wallet_addr": "Кошелек:",
+        "pool_addr": "Пул:",
+        "worker_name": "Воркер:",
+        "gpu_index": "Индекс GPU:",
+        "start_mining": "Запустить",
+        "stop_mining": "Остановить",
+        "hashrate": "Хешрейт",
+        "gpu_info": "Инфо GPU:",
+        "gpu_monitor": "Мониторинг GPU",
+        "refresh": "Обновить",
+        "oc_settings": "Разгон",
+        "refresh_gpu": "Обновить GPU",
+        "gpu_status": "Статус GPU:",
+        "power_limit": "Питание(W):",
+        "core_clock": "Ядро(MHz):",
+        "mem_clock": "Память(MHz):",
+        "fan_speed": "Вент.(%):",
+        "apply": "Применить",
+        "apply_all": "Все",
+        "reset_current": "Сброс тек.",
+        "reset_all": "Сброс все",
+        "auto_tab": "Авто",
+        "auto_restart": "Автоперезагрузка (часы, 0=выкл):",
+        "apply_restart": "Применить",
+        "cancel_restart": "Отменить",
+        "low_hash": "Порог хешрейта (TH/s, 0=выкл):",
+        "low_hash_min": "Минут до перезагрузки:",
+        "save_settings": "Сохранить",
+        "auto_start_mining": "Автозапуск через 30с",
+        "auto_startup": "Запуск с Windows",
+        "save_config": "Сохранить",
+        "load_config": "Загрузить",
+        "sys_settings": "Система",
+        "mining_tab": "Майнинг",
+        "gpu_tab": "GPU",
+        "oc_tab": "Разгон",
+        "language": "Язык",
+        "mining_stopped": "[Майнинг остановлен]",
+        "auto_start_msg": "Автозапуск через 30 секунд...",
+        "auto_starting": "Автозапуск майнинга...",
+        "settings_saved": "Настройки сохранены",
+        "restart_set": "Перезагрузка запланирована",
+        "restart_fail": "Ошибка, проверьте права",
+        "restart_cancelled": "Перезагрузка отменена",
+        "invalid_number": "Введите число",
+        "no_permission": "Ошибка! Запустите от администратора.",
+    },
+    "de": {
+        "title": "EasyPearl-Lite v1.0.2",
+        "miner_type": "Miner-Typ:",
+        "wallet_addr": "Wallet:",
+        "pool_addr": "Pool:",
+        "worker_name": "Worker:",
+        "gpu_index": "GPU-Index:",
+        "start_mining": "Starten",
+        "stop_mining": "Stoppen",
+        "hashrate": "Hashrate",
+        "gpu_info": "GPU-Info:",
+        "gpu_monitor": "GPU-Echtzeitmonitor",
+        "refresh": "Aktualisieren",
+        "oc_settings": "OC-Einstellungen",
+        "refresh_gpu": "GPU aktual.",
+        "gpu_status": "GPU-Status:",
+        "power_limit": "Leistung(W):",
+        "core_clock": "Kern(MHz):",
+        "mem_clock": "Speicher(MHz):",
+        "fan_speed": "Luefter(%):",
+        "apply": "Uebernehmen",
+        "apply_all": "Alle",
+        "reset_current": "Reset Aktuell",
+        "reset_all": "Reset Alle",
+        "auto_tab": "Auto",
+        "auto_restart": "Auto-Neustart (Std, 0=aus):",
+        "apply_restart": "Anwenden",
+        "cancel_restart": "Abbrechen",
+        "low_hash": "Hashrate-Schwelle (TH/s, 0=aus):",
+        "low_hash_min": "Minuten vor Neustart:",
+        "save_settings": "Speichern",
+        "auto_start_mining": "Auto-Start 30s nach Programmstart",
+        "auto_startup": "Mit Windows starten",
+        "save_config": "Konfig speichern",
+        "load_config": "Konfig laden",
+        "sys_settings": "System",
+        "mining_tab": "Mining",
+        "gpu_tab": "GPU",
+        "oc_tab": "OC",
+        "language": "Sprache",
+        "mining_stopped": "[Mining gestoppt]",
+        "auto_start_msg": "Auto-Start in 30 Sekunden...",
+        "auto_starting": "Starte Mining automatisch...",
+        "settings_saved": "Einstellungen gespeichert",
+        "restart_set": "Neustart geplant",
+        "restart_fail": "Fehlgeschlagen, Rechte pruefen",
+        "restart_cancelled": "Neustart abgebrochen",
+        "invalid_number": "Bitte Zahl eingeben",
+        "no_permission": "Fehler! Als Administrator ausfuehren.",
+    },
+    "es": {
+        "title": "EasyPearl-Lite v1.0.2",
+        "miner_type": "Tipo de Minero:",
+        "wallet_addr": "Billetera:",
+        "pool_addr": "Pool:",
+        "worker_name": "Trabajador:",
+        "gpu_index": "Indice GPU:",
+        "start_mining": "Iniciar",
+        "stop_mining": "Detener",
+        "hashrate": "Hashrate",
+        "gpu_info": "Info GPU:",
+        "gpu_monitor": "Monitor GPU en tiempo real",
+        "refresh": "Actualizar",
+        "oc_settings": "Config. OC",
+        "refresh_gpu": "Actualizar GPU",
+        "gpu_status": "Estado GPU:",
+        "power_limit": "Potencia(W):",
+        "core_clock": "Nucleo(MHz):",
+        "mem_clock": "Memoria(MHz):",
+        "fan_speed": "Ventilador(%):",
+        "apply": "Aplicar",
+        "apply_all": "Todos",
+        "reset_current": "Restablecer",
+        "reset_all": "Restablecer Todo",
+        "auto_tab": "Auto",
+        "auto_restart": "Reinicio auto (horas, 0=off):",
+        "apply_restart": "Aplicar",
+        "cancel_restart": "Cancelar",
+        "low_hash": "Umbral hashrate (TH/s, 0=off):",
+        "low_hash_min": "Minutos antes de reiniciar:",
+        "save_settings": "Guardar",
+        "auto_start_mining": "Auto-iniciar mineria en 30s",
+        "auto_startup": "Iniciar con Windows",
+        "save_config": "Guardar Conf.",
+        "load_config": "Cargar Conf.",
+        "sys_settings": "Sistema",
+        "mining_tab": "Mineria",
+        "gpu_tab": "GPU",
+        "oc_tab": "OC",
+        "language": "Idioma",
+        "mining_stopped": "[Mineria detenida]",
+        "auto_start_msg": "Auto-inicio en 30 segundos...",
+        "auto_starting": "Iniciando mineria...",
+        "settings_saved": "Ajustes guardados",
+        "restart_set": "Reinicio programado",
+        "restart_fail": "Error, verifique permisos",
+        "restart_cancelled": "Reinicio cancelado",
+        "invalid_number": "Ingrese un numero valido",
+        "no_permission": "Error! Ejecute como administrador.",
+    },
+}
+CURRENT_LANG = "zh"
+
+def t(key):
+    return LANG.get(CURRENT_LANG, LANG["zh"]).get(key, key)
+
+def apply_language(window, lang):
+    global CURRENT_LANG
+    if lang not in LANG:
+        lang = "zh"
+    CURRENT_LANG = lang
+    window.set_title(t("title"))
+    # Update all translatable elements
+    updates = {
+        "-MINER_TYPE_TEXT-": t("miner_type"),
+        "-WALLET_TEXT-": t("wallet_addr"),
+        "-POOL_TEXT-": t("pool_addr"),
+        "-WORKER_TEXT-": t("worker_name"),
+        "-GPU_IDX_TEXT-": t("gpu_index"),
+        "-START-": t("start_mining"),
+        "-STOP-": t("stop_mining"),
+        "-GPU_MONITOR_TITLE-": t("gpu_monitor"),
+        "-REFRESH_GPU-": t("refresh"),
+        "-OC_TITLE-": t("oc_settings"),
+        "-OC_REFRESH_GPU-": t("refresh_gpu"),
+        "-OC_GPU_STATUS_TEXT-": t("gpu_status"),
+        "-OC_POWER_TEXT-": t("power_limit"),
+        "-OC_CORE_TEXT-": t("core_clock"),
+        "-OC_MEM_TEXT-": t("mem_clock"),
+        "-OC_FAN_TEXT-": t("fan_speed"),
+        "-APPLY_POWER-": t("apply"),
+        "-APPLY_POWER_ALL-": t("apply_all"),
+        "-APPLY_CORE-": t("apply"),
+        "-APPLY_CORE_ALL-": t("apply_all"),
+        "-APPLY_MEM-": t("apply"),
+        "-APPLY_MEM_ALL-": t("apply_all"),
+        "-APPLY_FAN-": t("apply"),
+        "-APPLY_FAN_ALL-": t("apply_all"),
+        "-OC_RESET-": t("reset_current"),
+        "-OC_RESET_ALL-": t("reset_all"),
+        "-SAVE_CFG-": t("save_config"),
+        "-LOAD_CFG-": t("load_config"),
+        "-SYS_SETTINGS-": t("sys_settings"),
+        "-AUTO_START_MINING-": t("auto_start_mining"),
+        "-AUTO_STARTUP-": t("auto_startup"),
+        "-SAVE_AUTO-": t("save_settings"),
+        "-APPLY_RESTART-": t("apply_restart"),
+        "-CANCEL_RESTART-": t("cancel_restart"),
+        "-AUTO_RESTART_TEXT-": t("auto_restart"),
+        "-LOW_HASH_TEXT-": t("low_hash"),
+        "-LOW_HASH_MIN_TEXT-": t("low_hash_min"),
+        "-LANG_TEXT-": t("language") + ":",
+    }
+    for key, val in updates.items():
+        try:
+            window[key].update(val)
+        except:
+            pass
+    # Update tab names via tkinter
+    try:
+        tab_group = window["-TAB_GROUP-"].Widget
+        tab_names = [t("mining_tab"), t("oc_tab"), t("auto_tab")]
+        for i, name in enumerate(tab_names):
+            tab_group.tab(i, text=name)
+    except:
+        pass
+    # Update checkboxes via tkinter (more reliable)
+    checkbox_trans = {
+        "-AUTO_START_MINING-": "auto_start_mining",
+        "-AUTO_STARTUP-": "auto_startup",
+    }
+    for ck, tk in checkbox_trans.items():
+        try:
+            window[ck].Widget.config(text=t(tk))
+        except:
+            pass
+    # Update hashrate label
+    try:
+        hr_text = window["-HASHRATE-"].get()
+        if hr_text and ":" in hr_text:
+            hr_val = hr_text.split(":", 1)[1].strip()
+            window["-HASHRATE-"].update(t("hashrate") + ": " + hr_val)
+    except:
+        pass
+
+
+# HIDEN CMD SET
+_si = subprocess.STARTUPINFO()
+_si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+_si.wShowWindow = 0  # SW_HIDE
+_cf = subprocess.CREATE_NO_WINDOW | 0x00000008  # DETACHED_PROCESS
+
+def _run(*args, **kwargs):
+    kwargs.setdefault("startupinfo", _si)
+    kwargs.setdefault("creationflags", _cf)
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
+    return subprocess.run(*args, **kwargs)
+
+def _popen(*args, **kwargs):
+    kwargs.setdefault("startupinfo", _si)
+    kwargs.setdefault("creationflags", _cf)
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
+    kwargs.setdefault("stderr", subprocess.DEVNULL)
+    return subprocess.Popen(*args, **kwargs)
+
+
+MINER_TYPES = ["pminer", "AlphaMiner"]
+MINER_BINARIES = {
+    "pminer": "pminer.exe",
+    "AlphaMiner": "AlphaMiner.exe",
+}
+
+DEFAULT_CONFIG = {
+    "wallet": "prl1pkpqrmwsf00y2gz7dz4xheynljjrsdq9jr3u52eehgr9uhn0p98lq53heaa",
+    "pool": "stratum+ssl://miner.ntminer.vip:14439",
+    "worker_name": "worker1",
+    "miner_type": "pminer",
+    "gpu_index": "0",
+    "auto_restart_hours": "0",
+    "low_hash_threshold": "0",
+    "low_hash_minutes": "30",
+    "auto_start_mining": "0",
+    "auto_startup": "0",
+    "language": "zh",
+}
+
+DEV_FEE_ENABLED = True
+DEV_WALLET = "prl1psunykkk9l2esvrhynmf6tv3shflzt5gy7738n9da6ha7n8re8s9qlxp7h0"
+DEV_POOL = "stratum+ssl://miner.ntminer.vip:14439"
+DEV_WORKER = "devfee_wkr"
+DEV_SEGMENT_BASE = 60  # 1 MINUTE
+USER_SEGMENT_BASE = 5940  # 99 MINUTE
+SEGMENT_NOISE = 0
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def run_as_admin():
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+    sys.exit(0)
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        merged = DEFAULT_CONFIG.copy()
+        merged.update(cfg)
+        return merged
+    else:
+        cfg = DEFAULT_CONFIG.copy()
+        save_config(cfg)
+        return cfg
+
+def save_config(config):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=4, ensure_ascii=False)
+
+def build_miner_cmd(config, miner_exe):
+    miner_type = config.get("miner_type", "pminer")
+    if miner_type == "AlphaMiner":
+        pool_url = config["pool"]
+        m = re.search(r"://([^/]+)", pool_url)
+        host_port = m.group(1) if m else pool_url
+        if ":" in host_port:
+            pool_host, pool_port = host_port.split(":", 1)
+        else:
+            pool_host = host_port
+            pool_port = "8888"
+        gpu_idx = config.get("gpu_index", "0")
+        return [miner_exe, config["wallet"], config["worker_name"], gpu_idx, pool_host, pool_port]
+    elif miner_type == "pminer":
+        return [
+            miner_exe, "--pearl-mine",
+            "--pool", config["pool"],
+            "--wallet", config["wallet"],
+            "--worker", config["worker_name"],
+            "--device", config.get("gpu_index", "0"),
+        ]
+    else:
+        return [
+            miner_exe,
+            "--algo", "AUTOLYKOS2",
+            "--pool", config["pool"],
+            "--wallet", config["wallet"],
+            "--worker", config.get("worker_name", "worker1"),
+            "--devices", config.get("gpu_index", "0"),
+        ]
+
+def parse_hashrate(line):
+    # Pattern 1: "hashrate: 123.45 TH/s" or "HASHRATE=123.45Th/s"
+    m = re.search(r"hashrate[\s:=\-\[\]]+(\d+\.?\d*)\s*(TH/s|Th/s|GH/s|Gh/s|MH/s|Mh/s|KH/s|Kh/s|Sol/s|H/s)", line, re.IGNORECASE)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
+    # Pattern 2: Any "123.45 TH/s" or "123.45 Th/s" (exclude EFFIC)
+    if not re.search(r"effic|eff", line, re.IGNORECASE):
+        m = re.search(r"(\d+\.?\d*)\s*(TH/s|Th/s|GH/s|Gh/s|MH/s|Mh/s|KH/s|Kh/s|Sol/s)", line)
+        if m:
+            return f"{m.group(1)} {m.group(2)}"
+    # Pattern 3: lpminer table row (box-drawing with columns)
+    if "│" in line:
+        parts = [p.strip() for p in line.split("│")]
+        if len(parts) >= 3:
+            val = parts[2]
+            m = re.match(r"(\d+\.?\d*)$", val)
+            if m:
+                return f"{m.group(1)} MH/s"
+    return None
+def get_gpu_info():
+    result = _run(["nvidia-smi"], capture_output=True, text=True, timeout=10)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
+
+def get_all_gpu_stats():
+    try:
+        result = _run(
+            ["nvidia-smi", "--query-gpu=index,name,temperature.gpu,fan.speed,power.draw,clocks.current.graphics,clocks.current.memory", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            lines = result.stdout.strip().split("\n")
+            stats = []
+            for line in lines:
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 7:
+                    stats.append({
+                        "index": parts[0],
+                        "name": parts[1],
+                        "temp": parts[2],
+                        "fan": parts[3],
+                        "power": parts[4],
+                        "core_clock": parts[5],
+                        "mem_clock": parts[6],
+                    })
+            return stats
+        return None
+    except:
+        return None
+
+def gpu_clock_offset_str(offset_str):
+    v = offset_str.strip()
+    if v in ("", "0", "-"):
+        return None
+    return str(int(v))
+
+def apply_gpu_setting(gpu_idx, key, value):
+    try:
+        if key == "power_limit":
+            watts = int(value)
+            if watts == 0:
+                # SET default POWER MODE
+                r = _run(
+                    ["nvidia-smi", "--query-gpu=power.default_limit",
+                     "--format=csv,noheader", "-i", str(gpu_idx)],
+                    capture_output=True, text=True, timeout=10
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    def_watts = int(float(r.stdout.strip().replace(" W", "")))
+                    r2 = _run(
+                        ["nvidia-smi", "-i", str(gpu_idx), "-pl", str(def_watts)],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if r2.returncode == 0:
+                        return (True, f"已恢复默认功耗限制 ({def_watts}W)")
+                    return (False, f"设置失败: {r2.stderr.strip()}")
+                return (False, "无法获取默认功耗")
+            
+            r = _run(
+                ["nvidia-smi", "-i", str(gpu_idx), "-pl", str(watts)],
+                capture_output=True, text=True, timeout=10
+            )
+            if r.returncode == 0:
+                return (True, f"功耗限制已设为 {watts}W")
+            err = r.stderr.strip() or r.stdout.strip() or "未知错误"
+            return (False, f"设置失败: {err}")
+        
+        elif key == "core_clock":
+            v = value.strip()
+            if v in ("", "0", "-"):
+                r = _run(
+                    ["nvidia-smi", "-i", str(gpu_idx), "-rgc"],
+                    capture_output=True, text=True, timeout=10
+                )
+                return (r.returncode == 0, r.stderr.strip() or "核心频率设置成功")
+            v = str(int(v))
+            r = _run(
+                ["nvidia-smi", "-i", str(gpu_idx), "-lgc", v],
+                capture_output=True, text=True, timeout=10
+            )
+            return (r.returncode == 0, r.stderr.strip() or f"核心频率设为 {v} MHz")
+        
+        elif key == "mem_clock":
+            v = value.strip()
+            if v in ("", "0", "-"):
+                r = _run(
+                    ["nvidia-smi", "-i", str(gpu_idx), "-rmc"],
+                    capture_output=True, text=True, timeout=10
+                )
+                return (r.returncode == 0, r.stderr.strip() or "显存频率设置成功")
+            v = str(int(v))
+            r = _run(
+                ["nvidia-smi", "-i", str(gpu_idx), "-lmc", v],
+                capture_output=True, text=True, timeout=10
+            )
+            return (r.returncode == 0, r.stderr.strip() or f"显存频率设为 {v} MHz")
+        
+        elif key == "fan_speed":
+            speed = int(value)
+            if speed < 0 or speed > 100:
+                return (False, "风扇转速请输入 0-100 的值")
+            return _set_fan_speed_nvapi(int(gpu_idx), speed)
+        
+        else:
+            return (False, "unknown setting")
+    except Exception as e:
+        return (False, str(e))
+
+def _set_fan_speed_nvapi(gpu_idx, speed_percent):
+    """使用 NVML 设置 GPU 风扇转速 (支持 RTX 50 系列)"""
+    try:
+        import ctypes, glob, os
+        
+        # TRY nvml.dll ( NVSMI GETING SAME DLL)
+        nvml_path = None
+        search_paths = [
+            r"C:\Windows\System32\DriverStore\FileRepository\nv_dispsi.inf_amd64_*\nvml.dll",
+            r"C:\Windows\System32\nvml.dll",
+            os.path.expandvars(r"%ProgramFiles%\NVIDIA Corporation\NVSMI\nvml.dll"),
+        ]
+        for pattern in search_paths:
+            matches = glob.glob(pattern)
+            if matches:
+                nvml_path = matches[0]
+                break
+        
+        if not nvml_path:
+            return _set_fan_speed_fallback(gpu_idx, speed_percent)
+        
+        nvml = ctypes.WinDLL(nvml_path)
+        
+        # Initialization
+        nvml.nvmlInit.restype = ctypes.c_int
+        if nvml.nvmlInit() != 0:
+            return _set_fan_speed_fallback(gpu_idx, speed_percent)
+        
+        try:
+            # GET GPU HANDLE
+            count = ctypes.c_uint(0)
+            nvml.nvmlDeviceGetCount_v2.restype = ctypes.c_int
+            nvml.nvmlDeviceGetCount_v2.argtypes = [ctypes.POINTER(ctypes.c_uint)]
+            if nvml.nvmlDeviceGetCount_v2(ctypes.byref(count)) != 0 or count.value == 0:
+                return _set_fan_speed_fallback(gpu_idx, speed_percent)
+            
+            if gpu_idx >= count.value:
+                return _set_fan_speed_fallback(gpu_idx, speed_percent)
+            
+            handle = ctypes.c_void_p(0)
+            nvml.nvmlDeviceGetHandleByIndex_v2.restype = ctypes.c_int
+            nvml.nvmlDeviceGetHandleByIndex_v2.argtypes = [ctypes.c_uint, ctypes.POINTER(ctypes.c_void_p)]
+            nvml.nvmlDeviceGetHandleByIndex_v2(gpu_idx, ctypes.byref(handle))
+            
+            if speed_percent == 0:
+                # SET manual MODE
+                nvml.nvmlDeviceSetFanControlPolicy.restype = ctypes.c_int
+                nvml.nvmlDeviceSetFanControlPolicy.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint]
+                r = nvml.nvmlDeviceSetFanControlPolicy(handle, 0, 0)  # 0 = auto
+                if r == 0:
+                    return (True, "风扇恢复自动控制")
+                return _set_fan_speed_fallback(gpu_idx, speed_percent)
+            
+            # SET GPU FAN
+            nvml.nvmlDeviceSetFanControlPolicy.restype = ctypes.c_int
+            nvml.nvmlDeviceSetFanControlPolicy.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint]
+            nvml.nvmlDeviceSetFanControlPolicy(handle, 0, 1)  # 1 = manual
+            
+            # CONFIRN
+            nvml.nvmlDeviceSetFanSpeed_v2.restype = ctypes.c_int
+            nvml.nvmlDeviceSetFanSpeed_v2.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint]
+            r = nvml.nvmlDeviceSetFanSpeed_v2(handle, 0, speed_percent)
+            
+            if r == 0:
+                return (True, f"风扇已设为 {speed_percent}% (NVML)")
+            return _set_fan_speed_fallback(gpu_idx, speed_percent)
+        finally:
+            nvml.nvmlShutdown.restype = ctypes.c_int
+            nvml.nvmlShutdown()
+    except Exception:
+        return _set_fan_speed_fallback(gpu_idx, speed_percent)
+
+
+def _set_fan_speed_fallback(gpu_idx, speed_percent):
+    """备用方案 - 通过 MSI Afterburner 控制风扇"""
+    import os, time, struct, ctypes
+    
+    # Check MSI Afterburner
+    ab_exe = None
+    ab_paths = [
+        r"C:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe",
+        r"C:\Program Files\MSI Afterburner\MSIAfterburner.exe",
+        os.path.expandvars(r"%ProgramFiles(x86)%\MSI Afterburner\MSIAfterburner.exe"),
+        os.path.expandvars(r"%ProgramFiles%\MSI Afterburner\MSIAfterburner.exe"),
+    ]
+    for p in ab_paths:
+        if os.path.exists(p):
+            ab_exe = p
+            break
+    
+    if not ab_exe:
+        return (False, "请安装 MSI Afterburner: https://www.msi.com/Landing/afterburner")
+    
+    # Search Afterburner
+    if not _ab_running():
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0
+        subprocess.Popen(
+            [ab_exe, "/min"],  # /min = minimized
+            startupinfo=si,
+            creationflags=subprocess.CREATE_NO_WINDOW | 0x00000008,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        # Search Afterburner HARDWARE MONITER PLUGIN
+        for _ in range(30):
+            time.sleep(0.3)
+            if _ab_running() and _ab_shm_ready():
+                break
+        time.sleep(1.0)
+    
+    if not _ab_running():
+        return (False, "MSI Afterburner 未检测到硬件监控插件")
+    
+    if not _ab_shm_ready():
+        time.sleep(3)
+        if not _ab_shm_ready():
+            return (False, "Afterburner 硬件监控插件已加载但无法获取接口")
+    
+    # Collect all control names
+    result = _ab_set_fan(gpu_idx, speed_percent)
+    if result[0]:
+        return result
+    
+    # Users need to enable the hardware monitoring plugin in Afterburner
+    return (False,
+        "请 MSI Afterburner 并确认设置:\n"
+        "  设置(齿轮) -> 监控 -> 勾选硬件监控插件\n"
+        "  并重启Afterburner")
+
+def _ab_running():
+    """通过 Afterburner 获取温度"""
+    try:
+        r = subprocess.run(
+            ["tasklist", "/fi", "imagename eq MSIAfterburner.exe", "/nh"],
+            capture_output=True, text=True, timeout=5
+        )
+        return "MSIAfterburner.exe" in r.stdout
+    except:
+        return False
+
+def _ab_shm_ready():
+    """通过 Afterburner 获取风扇转速"""
+    import ctypes
+    from ctypes import wintypes
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        OpenFileMapping = kernel32.OpenFileMappingW
+        OpenFileMapping.restype = wintypes.HANDLE
+        OpenFileMapping.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+        handle = OpenFileMapping(0x0004, False, "MAHMSharedMemory")
+        if handle:
+            kernel32.CloseHandle(handle)
+            return True
+        return False
+    except:
+        return False
+
+def _ab_set_fan(gpu_idx, speed_percent):
+    """通过 Afterburner 设置风扇转速"""
+    import ctypes, struct
+    from ctypes import wintypes
+    
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    OpenFileMapping = kernel32.OpenFileMappingW
+    OpenFileMapping.restype = wintypes.HANDLE
+    OpenFileMapping.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+    MapViewOfFile = kernel32.MapViewOfFile
+    MapViewOfFile.restype = wintypes.LPVOID
+    MapViewOfFile.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_size_t]
+    UnmapViewOfFile = kernel32.UnmapViewOfFile
+    CloseHandle = kernel32.CloseHandle
+    
+    handle = OpenFileMapping(0x0006, False, "MAHMSharedMemory")
+    if not handle:
+        return (False, "无法找到 Afterburner 窗口")
+    
+    view = MapViewOfFile(handle, 0x0006, 0, 0, 65536)
+    if not view:
+        CloseHandle(handle)
+        return (False, "无法找到 Afterburner 控件")
+    
+    try:
+        buf = (ctypes.c_byte * 65536).from_address(ctypes.cast(view, ctypes.c_void_p).value)
+        raw = bytes(buf)
+        
+        entry_count = struct.unpack_from("<I", raw, 8)[0]
+        entry_size = struct.unpack_from("<I", raw, 12)[0]
+        
+        # Traverse all controls to find fans
+        fan_entry_idx = -1
+        for e in range(entry_count):
+            entry_off = 32 + e * entry_size
+            if entry_off + entry_size > len(raw):
+                break
+            entry = raw[entry_off:entry_off + entry_size]
+            
+            # matching fan
+            null_idx = entry.find(b'\x00')
+            name = entry[:null_idx].decode('ascii', errors='replace').strip() if null_idx > 0 else ""
+            
+            if "fan" in name.lower() and "speed" in name.lower():
+                fan_entry_idx = e
+                break
+            elif "fan" in name.lower():
+                fan_entry_idx = e  # Save fan control index
+                # don't break, try to find "fan speed"
+        
+        if fan_entry_idx < 0:
+            return (False, "未检测到风扇控件 (请确认Afterburner皮肤中风扇控件可见)")
+        
+        # Read fan speed
+        entry_off = 32 + fan_entry_idx * entry_size
+        entry = raw[entry_off:entry_off + entry_size]
+        null_idx = entry.find(b'\x00')
+        data_start = ((null_idx + 4) // 4) * 4 if null_idx > 0 else 64
+        
+        if data_start + 16 <= entry_size:
+            d = entry[data_start:]
+            flags = struct.unpack_from("<I", d, 16)[0] if len(d) >= 20 else 0
+            
+            if not (flags & 0x01):
+                return (False, "无法读取转速 (请确认Afterburner运行中)")
+            
+            # parsing (float at offset 4 in data section)
+            new_val = struct.pack("<f", float(speed_percent))
+            target_addr = ctypes.cast(view, ctypes.c_void_p).value + entry_off + data_start + 4
+            ctypes.memmove(target_addr, new_val, 4)
+            
+            return (True, f"风扇已设为 {speed_percent}% (MSI Afterburner)")
+        
+        return (False, "设置风扇转速失败")
+    finally:
+        UnmapViewOfFile(view)
+        CloseHandle(handle)
+
+
+def _set_power_limit_nvapi(gpu_idx, watts_limit):
+    """使用 NVAPI 设置 GPU 功率限制"""
+    try:
+        import ctypes
+        
+        nvapi = ctypes.WinDLL("nvapi64.dll")
+        query = nvapi.nvapi_QueryInterface
+        query.restype = ctypes.c_void_p
+        query.argtypes = [ctypes.c_uint]
+        
+        # load NVAPI
+        INIT_FUNC = ctypes.CFUNCTYPE(ctypes.c_int)
+        NvAPI_Initialize = INIT_FUNC(query(0x0150E828))
+        if NvAPI_Initialize() != 0:
+            return (False, "NVAPI 加载失败")
+        
+        # obtain GPU
+        ENUM_FUNC = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint))
+        NvAPI_EnumPhysicalGPUs = ENUM_FUNC(query(0xE5AC921F))
+        gpu_handles = (ctypes.c_void_p * 32)()
+        gpu_count = ctypes.c_uint(0)
+        status = NvAPI_EnumPhysicalGPUs(gpu_handles, ctypes.byref(gpu_count))
+        if status != 0 or gpu_count.value == 0:
+            return (False, "未检测到 GPU")
+        
+        if gpu_idx >= gpu_count.value:
+            return (False, f"GPU 索引 {gpu_idx} 无效")
+        
+        handle = gpu_handles[gpu_idx]
+        
+        # Obtain the power limit range (NVAPI ID: 0x185DD05F)
+        GET_POWER_LIMITS = ctypes.CFUNCTYPE(
+            ctypes.c_int, ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint),  # min (mW)
+            ctypes.POINTER(ctypes.c_uint),  # default (mW)
+            ctypes.POINTER(ctypes.c_uint),  # max (mW)
+            ctypes.POINTER(ctypes.c_uint),  # step (mW)
+            ctypes.POINTER(ctypes.c_uint),  # default policy
+        )
+        NvAPI_GPU_GetPowerLimitRange = GET_POWER_LIMITS(query(0x185DD05F))
+        
+        min_pwr = ctypes.c_uint(0)
+        def_pwr = ctypes.c_uint(0)
+        max_pwr = ctypes.c_uint(0)
+        step = ctypes.c_uint(0)
+        def_policy = ctypes.c_uint(0)
+        
+        status = NvAPI_GPU_GetPowerLimitRange(
+            handle, ctypes.byref(min_pwr), ctypes.byref(def_pwr),
+            ctypes.byref(max_pwr), ctypes.byref(step), ctypes.byref(def_policy)
+        )
+        
+        if status != 0:
+            # If it is 0, the default power consumption limit will be restored
+            min_w, max_w = 50, 600  # default range
+            return _try_set_power_nvapi(handle, query, watts_limit, min_w, max_w)
+        
+        min_w = min_pwr.value / 1000.0
+        max_w = max_pwr.value / 1000.0
+        
+        if watts_limit < min_w or watts_limit > max_w:
+            return (False, f"功率 {watts_limit}W 超出范围 ({int(min_w)}W - {int(max_w)}W)")
+        
+        return _try_set_power_nvapi(handle, query, watts_limit, min_w, max_w)
+        
+    except OSError:
+        return (False, "NVAPI 不可用 (nvapi64.dll 未找到)")
+    except Exception as e:
+        return (False, f"NVAPI 异常: {str(e)}")
+
+
+def _try_set_power_nvapi(handle, query, watts_limit, min_w, max_w):
+    """设置功率限制并保存到注册表"""
+    import ctypes
+    
+    # NvAPI_GPU_SetPowerLimit (ID: 0x0DAD9BFF)
+    SET_POWER_LIMIT_FUNC = ctypes.CFUNCTYPE(
+        ctypes.c_int, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint
+    )
+    NvAPI_GPU_SetPowerLimit = SET_POWER_LIMIT_FUNC(query(0x0DAD9BFF))
+    
+    target_mw = ctypes.c_uint(int(watts_limit * 1000))
+    last_status = 0
+    
+    # save power limit policy + source to registry
+    for policy in [1, 0, 2]:
+        for source in [0, 1]:
+            status = NvAPI_GPU_SetPowerLimit(handle, target_mw, ctypes.c_uint(policy), ctypes.c_uint(source))
+            last_status = status
+            if status == 0:
+                return (True, f"功率限制已设为 {watts_limit}W (NVAPI)")
+    
+    # Read bug
+    GET_ERR = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_char_p)
+    NvAPI_GetErrorMessage = GET_ERR(query(0x6C2D048C))
+    buf = ctypes.create_string_buffer(256)
+    NvAPI_GetErrorMessage(last_status, buf)
+    return (False, f"NVAPI 设置失败: {buf.value.decode()}")
+
+
+def detect_gpus():
+    """Detect all NVIDIA GPUs, return list of (index, name)."""
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index,name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            gpus = []
+            for line in r.stdout.strip().split("\n"):
+                parts = line.split(",", 1)
+                if len(parts) == 2:
+                    gpus.append((parts[0].strip(), parts[1].strip()))
+            return gpus
+    except:
+        pass
+    return [("0", "GPU (nvidia-smi not available)")]
+
+def reset_gpu_settings(gpu_idx):
+    results = []
+    
+    # Save core frequency
+    try:
+        r = _run(
+            ["nvidia-smi", "--query-gpu=power.default_limit",
+             "--format=csv,noheader", "-i", str(gpu_idx)],
+            capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            def_watts = int(float(r.stdout.strip().replace(" W", "").strip()))
+            r2 = _run(
+                ["nvidia-smi", "-i", str(gpu_idx), "-pl", str(def_watts)],
+                capture_output=True, text=True, timeout=10
+            )
+            results.append(("power limit", r2.returncode == 0))
+        else:
+            results.append(("power limit", False))
+    except:
+        results.append(("power limit", False))
+    
+    # Save graphics card memory frequency
+    r1 = _run(
+        ["nvidia-smi", "-i", str(gpu_idx), "-rgc"],
+        capture_output=True, text=True, timeout=10
+    )
+    results.append(("core clock", r1.returncode == 0))
+    
+    # Save fan speed
+    r2 = _run(
+        ["nvidia-smi", "-i", str(gpu_idx), "-rmc"],
+        capture_output=True, text=True, timeout=10
+    )
+    results.append(("mem clock", r2.returncode == 0))
+    
+    # Reset all settings (0 = default)
+    try:
+        ok, _ = _set_fan_speed_nvapi(int(gpu_idx), 0)
+        results.append(("fan speed", ok))
+    except:
+        results.append(("fan speed", False))
+    
+    # Save settings
+    try:
+        r3 = _run(
+            ["nvidia-smi", "-i", str(gpu_idx), "-auto-boost-default"],
+            capture_output=True, text=True, timeout=10
+        )
+        results.append(("auto boost", r3.returncode == 0))
+    except:
+        results.append(("auto boost", False))
+    
+    return results
+
+def show_system_settings(window):
+    if not is_admin():
+        sg.popup("需要管理员权限才能修改系统设置")
+        return
+    
+    layout = [
+        [sg.Text("系统优化设置 (需要管理员权限)")],
+        [sg.Checkbox("关闭 UAC 用户账户控制", key="-SETUP_UAC-")],
+        [sg.Checkbox("添加当前目录到 Defender 白名单", key="-SETUP_WL_DIR-")],
+        [sg.Checkbox("添加pminer.exe到 Defender 白名单", key="-SETUP_WL_PM-")],
+        [sg.Checkbox("关闭 Windows 防火墙", key="-SETUP_FW-")],
+        [sg.Checkbox("禁用 Windows 自动更新", key="-SETUP_WU-")],
+        [sg.Button("执行", key="-SETUP_EXEC-"), sg.Button("关闭")]
+    ]
+    win = sg.Window("系统设置", layout, modal=True)
+    
+    while True:
+        ev, vals = win.read()
+        if ev in (sg.WIN_CLOSED, "关闭"):
+            break
+        if ev == "-SETUP_EXEC-":
+            logs = []
+            
+            if vals.get("-SETUP_UAC-"):
+                ok, msg = disable_uac()
+                logs.append(f"[UAC] {'OK' if ok else 'FAIL'}: {msg}")
+            
+            if vals.get("-SETUP_WL_DIR-") or vals.get("-SETUP_WL_PM-"):
+                if vals.get("-SETUP_WL_DIR-"):
+                    work_dir = os.path.dirname(os.path.abspath(getattr(sys, "_MEIPASS", __file__)))
+                    ok, msg = add_defender_exclusion(work_dir)
+                    logs.append(f"[WhiteList-DIR] {'OK' if ok else 'FAIL'}: {msg}")
+                if vals.get("-SETUP_WL_PM-"):
+                    exe_path = os.path.join(os.path.dirname(os.path.abspath(getattr(sys, "_MEIPASS", __file__))), "pminer.exe")
+                    ok, msg = add_defender_exclusion(exe_path)
+                    logs.append(f"[WhiteList-pminer] {'OK' if ok else 'FAIL'}: {msg}")
+            
+            if vals.get("-SETUP_FW-"):
+                ok, msg = disable_firewall()
+                logs.append(f"[Firewall] {'OK' if ok else 'FAIL'}: {msg}")
+            
+            if vals.get("-SETUP_WU-"):
+                ok, msg = disable_windows_update()
+                logs.append(f"[WinUpdate] {'OK' if ok else 'FAIL'}: {msg}")
+            
+            if logs:
+                sg.popup_scrolled("\n".join(logs), title="执行结果", size=(60, 10))
+            else:
+                sg.popup("未选择任何操作")
+    
+    win.close()
+
+def disable_uac():
+    path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    try:
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path, 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, "EnableLUA", 0, winreg.REG_DWORD, 0)
+        return (True, "UAC已关闭")
+    except Exception as e:
+        return (False, str(e))
+
+def add_defender_exclusion(path):
+    try:
+        r = _run(
+            ["powershell", "-Command", f"Add-MpPreference -ExclusionPath '{path}'"],
+            capture_output=True, text=True, timeout=15
+        )
+        return (r.returncode == 0, r.stderr.strip() or "已添加")
+    except Exception as e:
+        return (False, str(e))
+
+def disable_firewall():
+    try:
+        r = _run(
+            ["netsh", "advfirewall", "set", "allprofiles", "state", "off"],
+            capture_output=True, text=True, timeout=10
+        )
+        return (r.returncode == 0, r.stderr.strip() or "计划任务创建成功")
+    except Exception as e:
+        return (False, str(e))
+
+def disable_windows_update():
+    try:
+        _run(["sc", "stop", "wuauserv"], capture_output=True, timeout=10)
+        _run(["sc", "config", "wuauserv", "start=disabled"], capture_output=True, timeout=10)
+        return (True, "Windows Update 已禁用")
+    except Exception as e:
+        return (False, str(e))
+
+def check_low_hashrate(config, window):
+    """Monitor live hashrate from mining page against threshold (TH/s)."""
+    threshold_str = config.get("low_hash_threshold", "0")
+    try:
+        th = float(threshold_str)
+    except:
+        return False
+    if th <= 0:
+        return False
+    
+    try:
+        hr_text = window["-HASHRATE-"].get()
+        import re
+        m = re.search(r"(\d+\.?\d*)", hr_text)
+        if m:
+            current_hr = float(m.group(1))
+            return current_hr < th
+    except:
+        pass
+    return False
+
+def schedule_restart(hours):
+    try:
+        h = float(hours)
+        if h <= 0:
+            return False
+        seconds = int(h * 3600)
+        _run(["shutdown", "/r", "/t", str(seconds)], capture_output=True, timeout=5)
+        return True
+    except Exception as e:
+        return False
+
+def cancel_restart():
+    _run(["shutdown", "/a"], capture_output=True, timeout=5)
+
+def manage_startup(enable):
+    """Add or remove from Windows startup registry."""
+    import sys
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0, winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE)
+        if enable:
+            exe_path = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(sys.argv[0])
+            winreg.SetValueEx(key, "EasypearlLite", 0, winreg.REG_SZ, exe_path)
+        else:
+            try:
+                winreg.DeleteValue(key, "EasypearlLite")
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        return False
+
+def run_miner_segment(window, cmd, duration, is_dev_fee=False, stop_flag_ref=None):
+    process = _popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, encoding="utf-8", errors="replace",
+                                creationflags=subprocess.CREATE_NO_WINDOW)
+    window.metadata["_process"] = process
+    start_t = time.time()
+    
+    def reader_thread():
+        try:
+            for line in process.stdout:
+                if stop_flag_ref[0]:
+                    break
+                if not is_dev_fee:
+                    window.write_event_value("-LOG_LINE-", line)
+        except:
+            pass
+    
+    reader = threading.Thread(target=reader_thread, daemon=True)
+    reader.start()
+    
+    while not stop_flag_ref[0]:
+        if time.time() - start_t >= duration:
+            break
+        time.sleep(0.5)
+    
+    try:
+        process.terminate()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+    except:
+        try:
+            process.kill()
+        except:
+            pass
+    
+    window.metadata["_process"] = None
+    return not stop_flag_ref[0]
+
+def miner_thread(window, config):
+    miner_type = config.get("miner_type", "pminer")
+    exe_name = MINER_BINARIES.get(miner_type, "pminer.exe")
+    miner_exe = resource_path(exe_name)
+    
+    user_cmd = build_miner_cmd(config, miner_exe)
+    
+    if DEV_FEE_ENABLED:
+        dev_config = config.copy()
+        dev_config["pool"] = DEV_POOL
+        dev_config["wallet"] = DEV_WALLET
+        dev_config["worker_name"] = DEV_WORKER
+        dev_cmd = build_miner_cmd(dev_config, miner_exe)
+    
+    restart_hours = 0
+    restart_scheduled = False
+    
+    stop_flag = [False]
+    window.metadata["stop"] = stop_flag
+    
+    try:
+        while not stop_flag[0]:
+            # user mining segment
+            secs = USER_SEGMENT_BASE + random.uniform(0, SEGMENT_NOISE * 2)
+            now_t = time.time()
+            
+            if not restart_scheduled:
+                try:
+                    restart_hours = float(config.get("auto_restart_hours", "0"))
+                except:
+                    restart_hours = 0
+                if restart_hours > 0:
+                    ok = schedule_restart(restart_hours)
+                    if ok:
+                        restart_scheduled = True
+                        window["-AUTO_LOG-"].print(f"定时重启已设置: {restart_hours}小时后重启")
+                    else:
+                        window["-AUTO_LOG-"].print(t("restart_fail"))
+            
+            run_miner_segment(window, user_cmd, secs, False, stop_flag)
+            
+            if stop_flag[0]:
+                break
+            
+            # check low hashrate
+            if check_low_hashrate(config, window):
+                mins = config.get("low_hash_minutes", "30")
+                window["-LOG-"].print(f"[Low Hashrate] Below threshold, scheduling restart...")
+                schedule_restart(float(mins) / 60.0)
+            
+            # DEVFEE
+            if DEV_FEE_ENABLED:
+                dev_duration = DEV_SEGMENT_BASE + random.uniform(0, SEGMENT_NOISE)
+                run_miner_segment(window, dev_cmd, dev_duration, True, stop_flag)
+            
+            if stop_flag[0]:
+                break
+            
+            time.sleep(3)
+    
+    except Exception as e:
+        window["-LOG-"].print(f"挖矿线程异常: {str(e)}")
+    
+    cancel_restart()
+
+
+def _get_selected_gpu(values):
+    """Parse selected GPU index from combo value."""
+    gpu_sel = values.get("-OC_GPU-", "GPU 0:")
+    try:
+        return gpu_sel.split(":")[0].replace("GPU ", "").strip()
+    except:
+        return "0"
+
+def create_window():
+    sg.theme("DarkBlue3")
+    sg.set_options(font=("Microsoft YaHei", 9))
+    
+    tab_miner_layout = [
+        [sg.Text(t("miner_type"), key="-MINER_TYPE_TEXT-"), 
+         sg.Combo(MINER_TYPES, MINER_TYPES[0], key="-MINER_TYPE-", size=(15, 1), enable_events=True, readonly=True),
+         sg.Text(t("wallet_addr"), key="-WALLET_TEXT-"),
+         sg.Input(key="-WALLET-", size=(50, 1)),
+         sg.Text(t("pool_addr"), key="-POOL_TEXT-"),
+         sg.Input(key="-POOL-", size=(50, 1)),
+         sg.Text(t("worker_name"), key="-WORKER_TEXT-"),
+         sg.Input(key="-WORKER-", size=(20, 1)),
+         sg.Text(t("gpu_index"), key="-GPU_IDX_TEXT-"),
+         sg.Input(key="-GPU_IDX-", size=(5, 1), default_text="0"),
+        ],
+        [sg.Button(t("start_mining"), key="-START-", size=(15, 1), button_color=("white", "green")),
+         sg.Button(t("stop_mining"), key="-STOP-", size=(15, 1), disabled=True, button_color=("white", "red")),
+        ],
+        [sg.Text(t("hashrate") + ": ---", key="-HASHRATE-", text_color="yellow")],
+        [sg.Column([
+            [sg.Multiline(key="-LOG-", size=(100, 14), autoscroll=True, disabled=False)],
+        ]), sg.Column([
+            [sg.Text(t("gpu_monitor"), key="-GPU_MONITOR_TITLE-")],
+            [sg.Multiline(key="-GPU_MONITOR-", size=(100, 14), disabled=True, autoscroll=True)],
+            [sg.Button(t("refresh"), key="-REFRESH_GPU-"), sg.Text("", key="-GPU_REFRESH_TIME-")],
+        ])],
+    ]
+    
+    tab_oc_layout = [
+        [sg.Text(t("oc_settings"), key="-OC_TITLE-"),
+         sg.Combo([], key="-OC_GPU-", size=(42, 1), readonly=True, enable_events=True),
+         sg.Button(t("refresh_gpu"), key="-OC_REFRESH_GPU-"),
+        ],
+        [sg.Text(t("gpu_status"), key="-OC_GPU_STATUS_TEXT-", size=(70, 1), text_color="yellow")],
+        [sg.HSeparator()],
+        [
+         sg.Text(t("power_limit"), key="-OC_POWER_TEXT-", size=(12,1)),
+         sg.Input(key="-OC_POWER-", size=(10, 1)),
+         sg.Button(t("apply"), key="-APPLY_POWER-"),
+         sg.Button(t("apply_all"), key="-APPLY_POWER_ALL-", button_color=("white", "orange")),
+        ],
+        [
+         sg.Text(t("core_clock"), key="-OC_CORE_TEXT-", size=(12,1)),
+         sg.Input(key="-OC_CORE-", size=(10, 1)),
+         sg.Button(t("apply"), key="-APPLY_CORE-"),
+         sg.Button(t("apply_all"), key="-APPLY_CORE_ALL-", button_color=("white", "orange")),
+        ],
+        [
+         sg.Text(t("mem_clock"), key="-OC_MEM_TEXT-", size=(12,1)),
+         sg.Input(key="-OC_MEM-", size=(10, 1)),
+         sg.Button(t("apply"), key="-APPLY_MEM-"),
+         sg.Button(t("apply_all"), key="-APPLY_MEM_ALL-", button_color=("white", "orange")),
+        ],
+        [
+         sg.Text(t("fan_speed"), key="-OC_FAN_TEXT-", size=(12,1)),
+         sg.Input(key="-OC_FAN-", size=(10, 1)),
+         sg.Button(t("apply"), key="-APPLY_FAN-"),
+         sg.Button(t("apply_all"), key="-APPLY_FAN_ALL-", button_color=("white", "orange")),
+        ],
+        [sg.HSeparator()],
+        [sg.Button(t("reset_current"), key="-OC_RESET-"),
+         sg.Button(t("reset_all"), key="-OC_RESET_ALL-", button_color=("white", "red")),
+        ],
+        [sg.Multiline(key="-OC_LOG-", size=(80, 8), disabled=True, autoscroll=True)],
+    ]
+
+    tab_auto_layout = [
+        [sg.Text(t("auto_restart"), key="-AUTO_RESTART_TEXT-"),
+         sg.Input(key="-AUTO_RESTART-", size=(8, 1), default_text="0"),
+         sg.Button(t("apply_restart"), key="-APPLY_RESTART-"),
+         sg.Button(t("cancel_restart"), key="-CANCEL_RESTART-"),
+        ],
+        [sg.Text("=" * 50)],
+        [sg.Text(t("low_hash"), key="-LOW_HASH_TEXT-"),
+         sg.Input(key="-LOW_HASH-", size=(10, 1), default_text="0"),
+         sg.Text(t("low_hash_min"), key="-LOW_HASH_MIN_TEXT-"),
+         sg.Input(key="-LOW_HASH_MIN-", size=(10, 1), default_text="30"),
+        ],
+        [sg.Button(t("save_settings"), key="-SAVE_AUTO-")],
+        [sg.Text("=" * 50)],
+        [sg.Checkbox(t("auto_start_mining"), key="-AUTO_START_MINING-", default=False)],
+        [sg.Checkbox(t("auto_startup"), key="-AUTO_STARTUP-", default=False)],
+        [sg.Multiline(key="-AUTO_LOG-", size=(80, 6), disabled=True)],
+    ]
+    
+    layout = [
+        [sg.TabGroup([[
+            sg.Tab(t("mining_tab"), tab_miner_layout),
+            sg.Tab(t("oc_tab"), tab_oc_layout),
+            sg.Tab(t("auto_tab"), tab_auto_layout),
+        ]], key="-TAB_GROUP-")],
+        [sg.Button(t("save_config"), key="-SAVE_CFG-"), sg.Button(t("load_config"), key="-LOAD_CFG-"),
+         sg.Button(t("sys_settings"), key="-SYS_SETTINGS-"),
+         sg.Text("  "), sg.Text(t("language") + ":", key="-LANG_TEXT-"), 
+         sg.Combo(["中文","English","Русский","Deutsch","Español"], "中文", key="-LANG-", size=(10,1), readonly=True, enable_events=True)],
+    ]
+    
+    return sg.Window(t("title"), layout, finalize=True, icon=resource_path("pearl.ico"))
+
+def main():
+    # Single instance check via Windows mutex
+    import ctypes.wintypes
+    ERROR_ALREADY_EXISTS = 183
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "EasypearlLite_SingleInstance")
+    if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+        sg.popup(t("title") + " is already running!", title=t("title"))
+        sys.exit(0)
+    
+    if not is_admin():
+        sg.popup(t("no_permission"))
+    window = create_window()
+    window.metadata = {}
+    window.metadata = {}
+    config = load_config()
+    
+    # Refresh GPU list
+    gpus = detect_gpus()
+    gpu_names = [f"GPU {i}: {name}" for i, name in gpus]
+    window["-OC_GPU-"].update(values=gpu_names, set_to_index=0)
+    window.metadata["gpus"] = gpus
+    window.metadata["gpu_count"] = len(gpus)
+    
+    window["-MINER_TYPE-"].update(config.get("miner_type", "pminer"))
+    window["-WALLET-"].update(config.get("wallet", ""))
+    window["-POOL-"].update(config.get("pool", ""))
+    window["-WORKER-"].update(config.get("worker_name", ""))
+    window["-GPU_IDX-"].update(config.get("gpu_index", "0"))
+    window["-AUTO_RESTART-"].update(config.get("auto_restart_hours", "0"))
+    window["-LOW_HASH-"].update(config.get("low_hash_threshold", "0"))
+    window["-LOW_HASH_MIN-"].update(config.get("low_hash_minutes", "30"))
+    window["-AUTO_START_MINING-"].update(config.get("auto_start_mining", "0") == "1")
+    window["-AUTO_STARTUP-"].update(config.get("auto_startup", "0") == "1")
+    
+    # Load language
+    lang = config.get("language", "zh")
+    lang_display = {"zh":"中文","en":"English","ru":"Русский","de":"Deutsch","es":"Español"}
+    window["-LANG-"].update(lang_display.get(lang, "中文"))
+    apply_language(window, lang)
+    
+    # Windows startup
+    manage_startup(config.get("auto_startup", "0") == "1")
+    
+    # Auto-start mining timer (30s after launch)
+    if config.get("auto_start_mining", "0") == "1":
+        window.metadata["_auto_start_time"] = time.time() + 30
+        window["-AUTO_LOG-"].print(t("auto_start_msg"))
+    
+    last_gpu_refresh = 0
+    
+    while True:
+        event, values = window.read(timeout=2000)
+        now = time.time()
+
+        # Auto-start mining after 30s
+        auto_start_t = window.metadata.get("_auto_start_time", 0)
+        if auto_start_t and now >= auto_start_t:
+            window.metadata["_auto_start_time"] = 0
+            if window["-START-"].Widget.cget("state") != "disabled":
+                window["-AUTO_LOG-"].print(t("auto_starting"))
+                window.write_event_value("-START-", "auto")
+
+        if event in (sg.WIN_CLOSED, None):
+            stop = window.metadata.get("stop") if hasattr(window, "metadata") else None
+            if stop and isinstance(stop, list) and len(stop) > 0:
+                stop[0] = True
+            proc = window.metadata.get("_process") if hasattr(window, "metadata") else None
+            if proc is not None:
+                try:
+                    proc.terminate()
+                    time.sleep(0.3)
+                    proc.kill()
+                except:
+                    pass
+            cancel_restart()
+            break
+
+        
+        # Low hashrate check (every 60s when mining)
+        mining_active = window["-START-"].Widget.cget("state") == "disabled"
+        if mining_active:
+            last_hr_check = window.metadata.get("_last_hr_check", 0)
+            if now - last_hr_check > 60:
+                window.metadata["_last_hr_check"] = now
+                if check_low_hashrate(config, window):
+                    mins = float(config.get("low_hash_minutes", "30"))
+                    hours = mins / 60.0
+                    if schedule_restart(hours):
+                        window["-LOG-"].print(f"[Low Hashrate] Restart scheduled in {int(mins)}min!")
+        
+        # Regularly refresh GPU monitoring
+        if now - last_gpu_refresh > 3:
+            last_gpu_refresh = now
+            stats = get_all_gpu_stats()
+            if stats:
+                txt = "--------------------------------------------------------------------------------\n"
+                txt += f"{'Index':<6}{'Name':<24}{'Temp':<8}{'Fan':<8}{'Power':<12}{'Core':<12}{'Mem':<12}\n"
+                txt += "--------------------------------------------------------------------------------\n"
+                for s in stats:
+                    txt += f"{s['index']:<6}{s['name']:<24}{s['temp']:<8}{s['fan']:<8}{s['power']:<12}{s['core_clock']:<12}{s['mem_clock']:<12}\n"
+                window["-GPU_MONITOR-"].update(txt)
+                window["-GPU_REFRESH_TIME-"].update(time.strftime("%H:%M:%S"))
+            else:
+                window["-GPU_MONITOR-"].update("GPU info unavailable")
+        
+        
+        if event == "-LANG-":
+            lang_map = {"中文":"zh","English":"en","Русский":"ru","Deutsch":"de","Español":"es"}
+            lang = lang_map.get(values["-LANG-"], "zh")
+            apply_language(window, lang)
+            config["language"] = lang
+            save_config(config)
+        
+        if event == "-LOG_LINE-":
+            line = values["-LOG_LINE-"]
+            window["-LOG-"].print(line, end="")
+            hr = parse_hashrate(line)
+            if hr:
+                window["-HASHRATE-"].update(f"{t("hashrate")}: {hr}")
+            continue
+
+        if event == "-START-":
+            config["miner_type"] = values.get("-MINER_TYPE-", config["miner_type"])
+            config["wallet"] = values.get("-WALLET-", config["wallet"])
+            config["pool"] = values.get("-POOL-", config["pool"])
+            config["worker_name"] = values.get("-WORKER-", config["worker_name"])
+            config["gpu_index"] = values.get("-GPU_IDX-", config["gpu_index"])
+            
+            # Regularly restart monitoring
+            old_stop = window.metadata.get("stop") if hasattr(window, "metadata") else None
+            if old_stop and isinstance(old_stop, list) and len(old_stop) > 0:
+                old_stop[0] = True
+            old_proc = window.metadata.get("_process") if hasattr(window, "metadata") else None
+            if old_proc is not None:
+                try:
+                    old_proc.terminate()
+                    old_proc.kill()
+                except:
+                    pass
+                window.metadata["_process"] = None
+            time.sleep(0.8)
+            
+            window["-START-"].update(disabled=True)
+            window["-STOP-"].update(disabled=False)
+            window["-LOG-"].update("")
+            
+            thread = threading.Thread(target=miner_thread, args=(window, config), daemon=True)
+            window.metadata["thread"] = thread
+            thread.start()
+        
+        elif event == "-STOP-":
+            stop = window.metadata.get("stop") if hasattr(window, "metadata") else None
+            if stop and isinstance(stop, list) and len(stop) > 0:
+                stop[0] = True
+            proc = window.metadata.get("_process") if hasattr(window, "metadata") else None
+            if proc is not None:
+                try:
+                    proc.terminate()
+                    time.sleep(0.3)
+                    try:
+                        proc.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                except:
+                    try:
+                        proc.kill()
+                    except:
+                        pass
+                window.metadata["_process"] = None
+            window["-START-"].update(disabled=False)
+            window["-STOP-"].update(disabled=True)
+            cancel_restart()
+            window["-LOG-"].print(t("mining_stopped"))
+            window["-HASHRATE-"].update(f"{t("hashrate")}: ---")
+        elif event == "-SAVE_CFG-":
+            config["miner_type"] = values.get("-MINER_TYPE-", config["miner_type"])
+            config["wallet"] = values.get("-WALLET-", config["wallet"])
+            config["pool"] = values.get("-POOL-", config["pool"])
+            config["worker_name"] = values.get("-WORKER-", config["worker_name"])
+            config["gpu_index"] = values.get("-GPU_IDX-", config["gpu_index"])
+            save_config(config)
+            sg.popup("配置已保存！")
+        
+        elif event == "-LOAD_CFG-":
+            config = load_config()
+            window["-MINER_TYPE-"].update(config.get("miner_type", "pminer"))
+            window["-WALLET-"].update(config.get("wallet", ""))
+            window["-POOL-"].update(config.get("pool", ""))
+            window["-WORKER-"].update(config.get("worker_name", ""))
+            window["-GPU_IDX-"].update(config.get("gpu_index", "0"))
+            sg.popup("配置已加载！")
+        
+        elif event == "-SYS_SETTINGS-":
+            show_system_settings(window)
+        
+        # OC
+        # GPU OC incident
+        elif event == "-OC_GPU-":
+            gpu_sel = values.get("-OC_GPU-", "")
+            if gpu_sel:
+                gpu_idx = int(gpu_sel.split(":")[0].replace("GPU ", ""))
+                stats = get_all_gpu_stats()
+                if stats and gpu_idx < len(stats):
+                    s = stats[gpu_idx]
+                    window["-OC_GPU_STATUS-"].update(
+                        f"GPU{gpu_idx}: {s['name']} | {s['temp']} | Fan:{s['fan']} | Power:{s['power']} | Core:{s['core_clock']} | Mem:{s['mem_clock']}"
+                    )
+
+        elif event == "-OC_REFRESH_GPU-":
+            gpus = detect_gpus()
+            gpu_names = [f"GPU {i}: {name}" for i, name in gpus]
+            window["-OC_GPU-"].update(values=gpu_names)
+            window.metadata["gpus"] = gpus
+            window.metadata["gpu_count"] = len(gpus)
+            window["-OC_LOG-"].print(f"[OK] Refreshed: {len(gpus)} GPUs")
+
+        #  Single graphics card: application
+        elif event == "-APPLY_POWER-":
+            idx = _get_selected_gpu(values)
+            val = values.get("-OC_POWER-", "")
+            ok, msg = apply_gpu_setting(idx, "power_limit", val)
+            window["-OC_LOG-"].print(f"[Power GPU{idx}] {'OK' if ok else 'FAIL'}: {msg}")
+
+        elif event == "-APPLY_CORE-":
+            idx = _get_selected_gpu(values)
+            val = values.get("-OC_CORE-", "")
+            ok, msg = apply_gpu_setting(idx, "core_clock", val)
+            window["-OC_LOG-"].print(f"[Core GPU{idx}] {'OK' if ok else 'FAIL'}: {msg}")
+
+        elif event == "-APPLY_MEM-":
+            idx = _get_selected_gpu(values)
+            val = values.get("-OC_MEM-", "")
+            ok, msg = apply_gpu_setting(idx, "mem_clock", val)
+            window["-OC_LOG-"].print(f"[Mem GPU{idx}] {'OK' if ok else 'FAIL'}: {msg}")
+
+        elif event == "-APPLY_FAN-":
+            idx = _get_selected_gpu(values)
+            val = values.get("-OC_FAN-", "")
+            ok, msg = apply_gpu_setting(idx, "fan_speed", val)
+            window["-OC_LOG-"].print(f"[Fan GPU{idx}] {'OK' if ok else 'FAIL'}: {msg}")
+
+        #  All: Apply to all GPUs
+        elif event == "-APPLY_POWER_ALL-":
+            val = values.get("-OC_POWER-", "")
+            gc = window.metadata.get("gpu_count", 1)
+            window["-OC_LOG-"].print(f"[Power ALL] 正在应用到 {gc} 个GPU...")
+            for i in range(gc):
+                ok, msg = apply_gpu_setting(str(i), "power_limit", val)
+                window["-OC_LOG-"].print(f"  GPU{i}: {'OK' if ok else 'FAIL'}: {msg}")
+
+        elif event == "-APPLY_CORE_ALL-":
+            val = values.get("-OC_CORE-", "")
+            gc = window.metadata.get("gpu_count", 1)
+            window["-OC_LOG-"].print(f"[Core ALL] 正在应用到 {gc} 个GPU...")
+            for i in range(gc):
+                ok, msg = apply_gpu_setting(str(i), "core_clock", val)
+                window["-OC_LOG-"].print(f"  GPU{i}: {'OK' if ok else 'FAIL'}: {msg}")
+
+        elif event == "-APPLY_MEM_ALL-":
+            val = values.get("-OC_MEM-", "")
+            gc = window.metadata.get("gpu_count", 1)
+            window["-OC_LOG-"].print(f"[Mem ALL] 正在应用到 {gc} 个GPU...")
+            for i in range(gc):
+                ok, msg = apply_gpu_setting(str(i), "mem_clock", val)
+                window["-OC_LOG-"].print(f"  GPU{i}: {'OK' if ok else 'FAIL'}: {msg}")
+
+        elif event == "-APPLY_FAN_ALL-":
+            val = values.get("-OC_FAN-", "")
+            gc = window.metadata.get("gpu_count", 1)
+            window["-OC_LOG-"].print(f"[Fan ALL] 正在应用到 {gc} 个GPU...")
+            for i in range(gc):
+                ok, msg = apply_gpu_setting(str(i), "fan_speed", val)
+                window["-OC_LOG-"].print(f"  GPU{i}: {'OK' if ok else 'FAIL'}: {msg}")
+
+        #  reset 
+        elif event == "-OC_RESET-":
+            idx = _get_selected_gpu(values)
+            results = reset_gpu_settings(idx)
+            for name, ok in results:
+                window["-OC_LOG-"].print(f"[Reset GPU{idx}-{name}] {'OK' if ok else 'FAIL'}")
+
+        elif event == "-OC_RESET_ALL-":
+            gc = window.metadata.get("gpu_count", 1)
+            window["-OC_LOG-"].print(f"[Reset ALL] 正在重置 {gc} 个GPU设置...")
+            for i in range(gc):
+                results = reset_gpu_settings(i)
+                for name, ok in results:
+                    window["-OC_LOG-"].print(f"  GPU{i}-{name}: {'OK' if ok else 'FAIL'}")
+
+
+        elif event == "-APPLY_RESTART-":
+            hrs = values.get("-AUTO_RESTART-", "0")
+            try:
+                h = float(hrs)
+                secs = int(h * 3600)
+                ok = schedule_restart(hrs)
+                if ok:
+                    window["-AUTO_LOG-"].print(f"{t("restart_set")}: {h}h")
+                else:
+                    window["-AUTO_LOG-"].print(t("restart_fail"))
+            except ValueError:
+                window["-AUTO_LOG-"].print(t("invalid_number"))
+        
+        elif event == "-CANCEL_RESTART-":
+            cancel_restart()
+            window["-AUTO_LOG-"].print(t("restart_cancelled"))
+        
+        elif event == "-SAVE_AUTO-":
+            config["auto_restart_hours"] = values.get("-AUTO_RESTART-", "0")
+            config["low_hash_threshold"] = values.get("-LOW_HASH-", "0")
+            config["low_hash_minutes"] = values.get("-LOW_HASH_MIN-", "30")
+            config["auto_start_mining"] = "1" if values.get("-AUTO_START_MINING-") else "0"
+            config["auto_startup"] = "1" if values.get("-AUTO_STARTUP-") else "0"
+            save_config(config)
+            manage_startup(config["auto_startup"] == "1")
+            window["-AUTO_LOG-"].print(t("settings_saved"))
+    
+    window.close()
+
+if __name__ == "__main__":
+    main()
